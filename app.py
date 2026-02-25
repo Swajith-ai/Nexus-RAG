@@ -11,14 +11,17 @@ from dotenv import load_dotenv
 from src.helper import download_embeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.retrievers import BM25Retriever
+
+# 1. FIXED IMPORT BLOCK
 try:
     from langchain_community.retrievers import EnsembleRetriever
 except ImportError:
-    # Fallback for different environment structures
     from langchain.retrievers import EnsembleRetriever
+
 from langchain_groq import ChatGroq
-from langchain_classic.chains import create_retrieval_chain
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+# Modern Chain Imports (Replacing langchain_classic)
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -26,7 +29,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # Loaders
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredExcelLoader
 
-# 1. PAGE CONFIG & CACHING
+# 2. PAGE CONFIG & CACHING
 st.set_page_config(page_title="Nexus Analytics Engine", layout="wide")
 load_dotenv()
 
@@ -40,7 +43,7 @@ try:
 except:
     groq_key = os.getenv("GROQ_API_KEY")
 
-# 2. SESSION STATE
+# 3. SESSION STATE
 if "messages" not in st.session_state: st.session_state.messages = []
 if "chat_history" not in st.session_state: st.session_state.chat_history = []
 if "vector_db" not in st.session_state: st.session_state.vector_db = None
@@ -79,7 +82,7 @@ def load_single_file(uploaded_file):
     os.remove(tmp_path)
     return docs
 
-# 3. SIDEBAR
+# 4. SIDEBAR
 with st.sidebar:
     st.title("Nexus Analytics")
     
@@ -118,7 +121,7 @@ with st.sidebar:
             st.success(f"Hybrid Sync Complete: {sync_duration:.2f}s")
             add_log(f"Synced {len(uploaded_files)} files in {sync_duration:.2f}s")
 
-# 4. MAIN INTERFACE
+# 5. MAIN INTERFACE
 st.title("Nexus Intelligence Agent")
 
 # Data Visualizer
@@ -140,7 +143,7 @@ if st.session_state.data_frames:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]): st.markdown(message["content"])
 
-# 5. HYBRID RETRIEVAL & RESPONSE
+# 6. HYBRID RETRIEVAL & RESPONSE
 if prompt := st.chat_input("Ask about your documents or data..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
@@ -164,7 +167,10 @@ if prompt := st.chat_input("Ask about your documents or data..."):
                     ("human", "{input}"),
                 ])
 
-                chain = create_retrieval_chain(ensemble_retriever, create_stuff_documents_chain(llm, prompt_template))
+                # Modern Chain Execution
+                doc_chain = create_stuff_documents_chain(llm, prompt_template)
+                chain = create_retrieval_chain(ensemble_retriever, doc_chain)
+                
                 response = chain.invoke({"input": prompt, "chat_history": st.session_state.chat_history})
 
                 st.markdown(response["answer"])
