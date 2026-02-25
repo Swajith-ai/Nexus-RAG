@@ -24,6 +24,7 @@ load_dotenv()
 
 @st.cache_resource
 def get_embeddings():
+    """Caches the embedding model to RAM to prevent slow reloads."""
     return download_embeddings()
 
 # --- CLOUD-SAFE API KEY LOGIC ---
@@ -32,7 +33,7 @@ try:
 except:
     groq_key = os.getenv("GROQ_API_KEY")
 
-# 2. SESSION STATE
+# 2. SESSION STATE INITIALIZATION
 if "messages" not in st.session_state: st.session_state.messages = []
 if "chat_history" not in st.session_state: st.session_state.chat_history = []
 if "vector_db" not in st.session_state: st.session_state.vector_db = None
@@ -59,11 +60,11 @@ def load_single_file(uploaded_file):
     os.remove(tmp_path)
     return docs
 
-# 3. SIDEBAR: INTELLIGENCE MODES
+# 3. SIDEBAR: INTELLIGENCE MODES & SYSTEM CONTROLS
 with st.sidebar:
     st.title("Nexus Control")
     
-    # MODE SELECTION UI
+    # INTUITIVE MODE SELECTION
     st.subheader("🧠 Intelligence Mode")
     mode = st.radio(
         "Select Operation Mode:",
@@ -71,19 +72,19 @@ with st.sidebar:
         index=1
     )
 
-    # DYNAMIC MODE DESCRIPTIONS
+    # DYNAMIC LOGIC FOR MODES
     mode_data = {
-        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ **Instant:** Prioritizes speed. Uses fewer chunks for a fast, conversational response."},
-        "General": {"temp": 0.4, "k": 5, "desc": "⚖️ **General:** The balanced 'Goldilocks' zone. Ideal for daily technical tasks."},
-        "Research": {"temp": 0.2, "k": 10, "desc": "🔍 **Research:** Deep retrieval. Grabs more data to ensure no technical detail is missed."},
-        "Deep Think": {"temp": 0.1, "k": 15, "desc": "🧠 **Deep Think:** Maximum accuracy. Cross-references multiple nodes for logical synthesis."}
+        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ **Instant Mode:** Prioritizes speed. Uses 3 chunks for a fast, conversational response."},
+        "General": {"temp": 0.4, "k": 5, "desc": "⚖️ **General Mode:** The balanced zone. Uses 5 chunks for reliable daily tasks."},
+        "Research": {"temp": 0.2, "k": 10, "desc": "🔍 **Research Mode:** Deep retrieval. Grabs 10 chunks to ensure no detail is missed."},
+        "Deep Think": {"temp": 0.1, "k": 15, "desc": "🧠 **Deep Think:** Maximum accuracy. Cross-references 15 nodes for logical synthesis."}
     }
     
-    # Display the description of the selected mode
     st.info(mode_data[mode]["desc"])
     
-    temp = mode_data[mode]["temp"]
-    k_val = mode_data[mode]["k"]
+    # Apply parameters
+    current_temp = mode_data[mode]["temp"]
+    current_k = mode_data[mode]["k"]
 
     st.divider()
     if st.button("Purge Session"):
@@ -111,7 +112,7 @@ with st.sidebar:
             add_log(f"Sync successful: {st.session_state.sync_time:.2f}s")
             st.success(f"Sync Complete: {st.session_state.sync_time:.2f}s")
 
-    # Metrics
+    # METRICS DISPLAY
     st.divider()
     st.markdown(f"**Last Sync:** `{st.session_state.sync_time:.2f}s` | **Nodes:** `{st.session_state.total_chunks}`")
     
@@ -121,30 +122,31 @@ with st.sidebar:
 
 # 4. MAIN CHAT INTERFACE
 st.title("Nexus Intelligence Agent")
-st.caption(f"Status: **{mode} Mode** active.")
+st.caption(f"Status: **{mode} Mode** is engaged.")
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 5. RETRIEVAL & RESPONSE
+# 5. RETRIEVAL & RESPONSE LOGIC
 if prompt := st.chat_input("Query the knowledge base..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
 
     with st.chat_message("assistant"):
         if not st.session_state.vector_db:
-            st.warning("Please upload and sync documents.")
+            st.warning("Nexus requires data. Please upload and sync documents.")
         else:
             try:
                 # START ANALYSIS TIMER
                 analysis_start = time.time()
                 
-                llm = ChatGroq(model_name="llama-3.3-70b-versatile", groq_api_key=groq_key, temperature=temp)
+                llm = ChatGroq(model_name="llama-3.3-70b-versatile", groq_api_key=groq_key, temperature=current_temp)
                 
+                # Dynamic System Prompting
                 system_instruction = "You are the Nexus Technical Agent. "
                 if mode == "Deep Think":
-                    system_instruction += "Analyze context step-by-step. Provide a high-precision, logically structured response."
+                    system_instruction += "Think step-by-step. Analyze all provided context for complex links and contradictions."
                 
                 prompt_template = ChatPromptTemplate.from_messages([
                     ("system", f"{system_instruction}\n\nContext:\n{{context}}"),
@@ -152,20 +154,21 @@ if prompt := st.chat_input("Query the knowledge base..."):
                     ("human", "{input}"),
                 ])
 
-                retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": k_val})
+                # Use dynamic K value based on mode
+                retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": current_k})
                 document_chain = create_stuff_documents_chain(llm, prompt_template)
                 retrieval_chain = create_retrieval_chain(retriever, document_chain)
 
                 with st.spinner(f"Nexus {mode} is analyzing..."):
                     response = retrieval_chain.invoke({"input": prompt, "chat_history": st.session_state.chat_history})
 
-                # CALCULATE ANALYSIS TIME
+                # CALCULATE DURATION
                 analysis_duration = time.time() - analysis_start
                 ans = response["answer"]
                 
-                # UI: Display Answer + Mode Metadata
+                # OUTPUT DISPLAY
                 st.markdown(ans)
-                st.caption(f"⏱️ Analysis Time: **{analysis_duration:.2f}s** in {mode} Mode")
+                st.caption(f"⏱️ Analysis Time: **{analysis_duration:.2f}s** | Mode: **{mode}**")
                 
                 with st.expander("🔍 Intelligence Evidence (Source Attribution)"):
                     for i, doc in enumerate(response["context"]):
@@ -179,4 +182,4 @@ if prompt := st.chat_input("Query the knowledge base..."):
                 st.session_state.messages.append({"role": "assistant", "content": ans})
 
             except Exception as e:
-                st.error(f"System Error: {e}")
+                st.error(f"Execution Error: {e}")
