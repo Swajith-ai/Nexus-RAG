@@ -11,3 +11,5 @@ docx2txt
 openpyxl
 python-dotenv
 faiss-cpu
+rank_bm25
+plotly
