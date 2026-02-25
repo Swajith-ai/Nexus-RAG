@@ -7,19 +7,14 @@ import plotly.express as px
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
-# --- CORE RAG & UTILS ---
+# --- STABLE 2026 IMPORTS ---
 from src.helper import download_embeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.retrievers import BM25Retriever
+from langchain_community.retrievers import EnsembleRetriever 
 from langchain_groq import ChatGroq
 
-# --- THE STABLE RETRIEVER IMPORT ---
-try:
-    from langchain_community.retrievers import EnsembleRetriever
-except ImportError:
-    from langchain.retrievers.ensemble import EnsembleRetriever
-
-# --- STABLE CHAIN IMPORTS ---
+# Official LangChain 0.3+ Chain Imports
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
@@ -82,14 +77,14 @@ with st.sidebar:
     mode = st.radio("Intelligence Mode:", ["Instant", "General", "Deep Think"], index=1)
     
     mode_config = {
-        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ Fast responses, shallow search."},
-        "General": {"temp": 0.3, "k": 6, "desc": "⚖️ Balanced accuracy and speed."},
-        "Deep Think": {"temp": 0.1, "k": 12, "desc": "🧠 High precision, deep cross-referencing."}
+        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ Optimized for speed."},
+        "General": {"temp": 0.3, "k": 6, "desc": "⚖️ Balanced accuracy."},
+        "Deep Think": {"temp": 0.1, "k": 12, "desc": "🧠 Maximum precision."}
     }
     st.info(mode_config[mode]["desc"])
 
     st.divider()
-    uploaded_files = st.file_uploader("Upload Docs (PDF/Excel/CSV)", type=["pdf", "docx", "xlsx", "csv"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Upload Docs", type=["pdf", "docx", "xlsx", "csv"], accept_multiple_files=True)
     
     if st.button("Initialize Hybrid Sync"):
         if uploaded_files:
