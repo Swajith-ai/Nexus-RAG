@@ -11,7 +11,11 @@ from dotenv import load_dotenv
 from src.helper import download_embeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.retrievers import BM25Retriever
-from langchain_community.retrievers import EnsembleRetriever # RECTIFIED IMPORT
+try:
+    from langchain_community.retrievers import EnsembleRetriever
+except ImportError:
+    # Fallback for different environment structures
+    from langchain.retrievers import EnsembleRetriever
 from langchain_groq import ChatGroq
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
