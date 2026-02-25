@@ -3,7 +3,7 @@ import os
 import tempfile
 from dotenv import load_dotenv
 
-# --- STABLE CORE IMPORTS ---
+# --- CORE STABLE IMPORTS ---
 from src.helper import download_embeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
@@ -67,6 +67,8 @@ with st.sidebar:
 
 # 4. CHAT INTERFACE
 st.title("Nexus Intelligence Agent")
+
+
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
