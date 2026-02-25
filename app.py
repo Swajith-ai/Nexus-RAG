@@ -7,14 +7,13 @@ import plotly.express as px
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
-# --- STABLE 2026 IMPORTS ---
+# --- THE CRITICAL IMPORTS ---
 from src.helper import download_embeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.retrievers import EnsembleRetriever 
 from langchain_groq import ChatGroq
 
-# Official LangChain 0.3+ Chain Imports
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
@@ -77,7 +76,7 @@ with st.sidebar:
     mode = st.radio("Intelligence Mode:", ["Instant", "General", "Deep Think"], index=1)
     
     mode_config = {
-        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ Optimized for speed."},
+        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ Fast responses, shallow search."},
         "General": {"temp": 0.3, "k": 6, "desc": "⚖️ Balanced accuracy."},
         "Deep Think": {"temp": 0.1, "k": 12, "desc": "🧠 Maximum precision."}
     }
