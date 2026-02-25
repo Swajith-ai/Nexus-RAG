@@ -1,7 +1,6 @@
 streamlit
 langchain
 langchain-community
-langchain-core
 langchain-groq
 langchain-huggingface
 langchain-text-splitters
@@ -9,8 +8,4 @@ faiss-cpu
 sentence-transformers
 pypdf
 docx2txt
-openpyxl
 python-dotenv
-rank_bm25
-plotly
-pandas
