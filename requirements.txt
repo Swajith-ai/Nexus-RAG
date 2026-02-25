@@ -10,4 +10,3 @@ pypdf
 docx2txt
 openpyxl
 python-dotenv
-faiss-cpu
