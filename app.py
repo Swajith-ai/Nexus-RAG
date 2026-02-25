@@ -7,22 +7,27 @@ import plotly.express as px
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
-# --- THE CRITICAL IMPORTS ---
+# --- UNIVERSAL SMART IMPORTER (2026 FIX) ---
+try:
+    from langchain.retrievers import EnsembleRetriever
+except ImportError:
+    try:
+        from langchain_community.retrievers import EnsembleRetriever
+    except ImportError:
+        from langchain_classic.retrievers import EnsembleRetriever
+
 from src.helper import download_embeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.retrievers import BM25Retriever
-from langchain_community.retrievers import EnsembleRetriever 
 from langchain_groq import ChatGroq
-
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
-
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredExcelLoader
 
-# 1. PAGE CONFIG
+# --- 1. PAGE CONFIG & CACHING ---
 st.set_page_config(page_title="Nexus Analytics Engine", layout="wide")
 load_dotenv()
 
@@ -30,13 +35,12 @@ load_dotenv()
 def get_embeddings():
     return download_embeddings()
 
-# API Key Handling
 try:
     groq_key = st.secrets["GROQ_API_KEY"]
 except:
     groq_key = os.getenv("GROQ_API_KEY")
 
-# 2. SESSION STATE
+# --- 2. SESSION STATE ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "chat_history" not in st.session_state: st.session_state.chat_history = []
 if "vector_db" not in st.session_state: st.session_state.vector_db = None
@@ -70,13 +74,13 @@ def load_single_file(uploaded_file):
     os.remove(tmp_path)
     return docs
 
-# 3. SIDEBAR
+# --- 3. SIDEBAR ---
 with st.sidebar:
     st.title("Nexus Control")
     mode = st.radio("Intelligence Mode:", ["Instant", "General", "Deep Think"], index=1)
     
     mode_config = {
-        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ Fast responses, shallow search."},
+        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ Optimized for speed."},
         "General": {"temp": 0.3, "k": 6, "desc": "⚖️ Balanced accuracy."},
         "Deep Think": {"temp": 0.1, "k": 12, "desc": "🧠 Maximum precision."}
     }
@@ -100,7 +104,7 @@ with st.sidebar:
             st.session_state.total_chunks = len(final_docs)
             st.success(f"Sync Complete: {time.time()-start_time:.2f}s")
 
-# 4. DATA VISUALIZER
+# --- 4. DATA VISUALIZER ---
 if st.session_state.data_frames:
     with st.expander("📊 Data Visualizer"):
         file_name = st.selectbox("Select file:", list(st.session_state.data_frames.keys()))
@@ -113,7 +117,7 @@ if st.session_state.data_frames:
         fig = getattr(px, ctype.lower())(df, x=x, y=y, template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
 
-# 5. CHAT INTERFACE
+# --- 5. CHAT INTERFACE ---
 st.title("Nexus Intelligence Agent")
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]): st.markdown(msg["content"])
@@ -130,7 +134,7 @@ if prompt := st.chat_input("Ask about your data..."):
                 analysis_start = time.time()
                 llm = ChatGroq(model_name="llama-3.3-70b-versatile", groq_api_key=groq_key, temperature=mode_config[mode]["temp"])
                 
-                # Hybrid Retrieval Logic
+                # Retrieval Logic
                 faiss_ret = st.session_state.vector_db.as_retriever(search_kwargs={"k": mode_config[mode]["k"]})
                 bm25_ret = st.session_state.bm25_retriever
                 ensemble_ret = EnsembleRetriever(retrievers=[faiss_ret, bm25_ret], weights=[0.7, 0.3])
