@@ -13,3 +13,4 @@ pypdf
 python-docx
 pandas
 openpyxl
+langchain-text-splitters
