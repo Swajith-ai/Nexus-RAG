@@ -8,7 +8,7 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
-from helper import load_pdf, text_split, download_embeddings
+from src.helper import load_pdf, text_split, download_embeddings
 
 # ----------------------------
 # 🔐 Load Environment
