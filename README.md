@@ -1,38 +1,217 @@
-# Nexus Intelligence Agent: Advanced Agentic RAG System
+🚀 Nexus Intelligence Agent
+Retrieval-Augmented Generation (RAG) System using Llama 3 & FAISS
+📌 Project Overview
 
-Nexus is a professional-grade Retrieval-Augmented Generation (RAG) assistant designed for high-speed technical document analysis. Built with Python 3.14 and Llama 3.3, it transcends basic chatbots by utilizing "Agentic Memory" and parallel processing.
+The Nexus Intelligence Agent is a production-ready Retrieval-Augmented Generation (RAG) system designed to enable intelligent question-answering over user-uploaded documents.
 
-## 🚀 Key Features
+The system supports:
 
-- **Agentic Memory:** Unlike standard RAG, Nexus maintains a message buffer to understand follow-up questions (e.g., "Tell me more about *that*").
-- **Parallel Document Ingestion:** Uses `ThreadPoolExecutor` to load multiple PDF, DOCX, and XLSX files simultaneously, significantly reducing sync time.
-- **Optimized Neural Indexing:** Uses FAISS and HuggingFace embeddings with an optimized chunking strategy (1000 tokens) for faster vectorization.
-- **Executive UI:** A clean, monochromatic Streamlit interface with high-breadth input fields, technical logs, and automatic light/dark mode support.
-- **Automated Executive Summary:** A dedicated agentic tool that synthesizes long-form documents into concise reports.
+PDF files
 
-## 🛠️ Technical Stack
+DOCX files
 
-- **LLM:** Llama 3.3 (70B-Versatile via Groq)
-- **Framework:** LangChain (Modular 2026 Distribution)
-- **Vector Store:** FAISS (Facebook AI Similarity Search)
-- **Frontend:** Streamlit
-- **Embeddings:** HuggingFace (Sentence-Transformers)
+XLSX files
 
-## 📁 Project Structure & Components
+Uploaded documents are processed into semantic chunks, converted into vector embeddings using HuggingFace models, and stored in a FAISS vector database. When a user submits a query, relevant context is retrieved and passed to Llama 3.3 (70B) via the Groq API to generate accurate, grounded responses.
 
-- `app.py`: The main engine handling the UI, Agentic logic, and Retrieval chains.
-- `src/helper.py`: Contains the logic for initializing the embedding model.
-- `requirements.txt`: List of dependencies required for cloud deployment.
-- `.env`: (Private) Stores the Groq API Key.
-- `faiss_index/`: Local storage for the mathematical representation of your documents.
+The application is deployed using Streamlit with an interactive web interface.
 
-## ⚙️ How It Works (Step-by-Step)
+🎯 Problem Statement
 
-1. **Document Ingestion:** The system reads multiple file formats in parallel to save time.
-2. **Chunking & Embedding:** Documents are split into segments and converted into 384-dimensional vectors.
-3. **Neural Sync:** These vectors are stored in FAISS for near-instant retrieval.
-4. **Agentic Retrieval:** When a query is entered, the agent retrieves the top 5 most relevant segments while considering previous chat context.
-5. **Contextual Generation:** The LLM receives the prompt, the context, and the memory to generate a precise, verifiable answer.
+Large Language Models (LLMs):
 
----
-*Created as a part of the AI/ML B.Tech curriculum at Sathyabama Institute of Science & Technology.*
+Do not have access to private documents
+
+May generate hallucinated responses
+
+Cannot dynamically update knowledge
+
+Organizations require a system that:
+
+Retrieves information from their own documents
+
+Generates context-aware answers
+
+Supports conversational follow-up queries
+
+Avoids retraining expensive large models
+
+This project solves these challenges using a Retrieval-Augmented Generation architecture.
+
+🏗️ System Architecture
+
+Below is the high-level architecture of the Nexus Intelligence Agent:
+
+🧩 Architecture Breakdown
+1️⃣ Document Processing Layer
+
+Multi-format file loaders
+
+Parallel ingestion using ThreadPoolExecutor
+
+Secure temporary storage
+
+2️⃣ Text Processing Layer
+
+Recursive character text splitting
+
+Chunk size: 500
+
+Overlap: 50
+
+Preserves semantic continuity
+
+3️⃣ Embedding Layer
+
+Model: sentence-transformers/all-MiniLM-L6-v2
+
+384-dimensional dense vectors
+
+Implemented using HuggingFaceEmbeddings
+
+4️⃣ Vector Database Layer
+
+FAISS similarity search
+
+Persistent local index
+
+Fast nearest-neighbor retrieval
+
+5️⃣ Retrieval & Generation Layer
+
+Relevant chunks retrieved
+
+Context injected into prompt
+
+Response generated using Llama 3.3 (70B)
+
+6️⃣ Interface Layer
+
+Streamlit frontend
+
+Session-based conversational memory
+
+Real-time response display
+
+✨ Key Features
+
+Retrieval-Augmented Generation pipeline
+
+Multi-format document support
+
+Parallel document ingestion
+
+Optimized semantic chunking
+
+HuggingFace sentence-transformer embeddings
+
+FAISS vector similarity search
+
+Llama 3.3 (70B) integration via Groq
+
+Conversational memory support
+
+Persistent vector storage
+
+Streamlit-based interactive UI
+
+Live cloud deployment
+
+🛠️ Tech Stack
+Programming Language
+
+Python
+
+AI / Machine Learning
+
+LangChain
+
+HuggingFace Transformers
+
+FAISS
+
+Llama 3.3 (via Groq API)
+
+Frontend
+
+Streamlit
+
+Document Processing
+
+PyPDF
+
+docx2txt
+
+openpyxl
+
+Utilities
+
+dotenv
+
+concurrent.futures
+
+🔄 Project Workflow
+
+Import dependencies
+
+Upload documents
+
+Extract text using loaders
+
+Split text into semantic chunks
+
+Generate embeddings
+
+Store embeddings in FAISS
+
+Initialize retrieval chain
+
+Accept user query
+
+Retrieve relevant document chunks
+
+Generate response using Llama 3.3
+
+Display output in Streamlit
+
+Maintain chat history
+
+⚡ Performance Optimizations
+
+Cached embeddings to prevent recomputation
+
+Multi-threaded document ingestion
+
+Persistent FAISS indexing
+
+Optimized chunk size and overlap
+
+Low-latency inference using Groq API
+
+🌍 Live Demo
+
+https://nexus-rag-cey8qzv9fh2tourqlt5nmu.streamlit.app/
+
+💻 GitHub Repository
+
+https://github.com/Swajith-ai/Nexus-RAG.git
+
+🧠 Concepts Demonstrated
+
+Retrieval-Augmented Generation (RAG)
+
+Vector Databases & Semantic Search
+
+Transformer-Based Embeddings
+
+Prompt Engineering
+
+Conversational Memory
+
+AI Deployment Architecture
+
+Parallel Processing
+
+👨‍💻 Author
+
+Swajith S S
