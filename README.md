@@ -1,217 +1,138 @@
-🚀 Nexus Intelligence Agent
-Retrieval-Augmented Generation (RAG) System using Llama 3 & FAISS
-📌 Project Overview
+# 🚀 Nexus Intelligence Agent
 
-The Nexus Intelligence Agent is a production-ready Retrieval-Augmented Generation (RAG) system designed to enable intelligent question-answering over user-uploaded documents.
+### Intelligent Document Question-Answering using Retrieval-Augmented Generation (RAG)
 
-The system supports:
+------------------------------------------------------------------------
 
-PDF files
+## ✨ Overview
 
-DOCX files
+**Nexus Intelligence Agent** is a production-ready RAG system that
+enables users to upload documents and interact with them using natural
+language.
 
-XLSX files
+Instead of relying only on a language model's internal knowledge, the
+system:
 
-Uploaded documents are processed into semantic chunks, converted into vector embeddings using HuggingFace models, and stored in a FAISS vector database. When a user submits a query, relevant context is retrieved and passed to Llama 3.3 (70B) via the Groq API to generate accurate, grounded responses.
+• Retrieves relevant document context\
+• Injects it into the prompt\
+• Generates grounded responses using **Llama 3.3 (70B)**
 
-The application is deployed using Streamlit with an interactive web interface.
+Built with performance, modularity, and real-world deployment in mind.
 
-🎯 Problem Statement
+------------------------------------------------------------------------
 
-Large Language Models (LLMs):
+## 🎯 The Problem
 
-Do not have access to private documents
+Large Language Models:
 
-May generate hallucinated responses
+• Cannot access private documents\
+• May hallucinate answers\
+• Cannot dynamically update knowledge
 
-Cannot dynamically update knowledge
+Organizations need:
 
-Organizations require a system that:
+• Document-grounded responses\
+• Context-aware conversations\
+• No expensive retraining
 
-Retrieves information from their own documents
+This project solves that using a **Retrieval-Augmented Generation
+architecture**.
 
-Generates context-aware answers
+------------------------------------------------------------------------
 
-Supports conversational follow-up queries
+## 🏗️ Architecture
 
-Avoids retraining expensive large models
+``` mermaid
+flowchart LR
+    A[User Upload] --> B[Document Loader]
+    B --> C[Text Chunking]
+    C --> D[Embeddings - MiniLM]
+    D --> E[FAISS Vector Store]
 
-This project solves these challenges using a Retrieval-Augmented Generation architecture.
+    F[User Query] --> G[Similarity Search]
+    E --> G
+    G --> H[Context Injection]
+    H --> I[Llama 3.3 via Groq]
+    I --> J[Generated Response]
+    J --> K[Streamlit UI]
+```
 
-🏗️ System Architecture
+------------------------------------------------------------------------
 
-Below is the high-level architecture of the Nexus Intelligence Agent:
+## 🔧 Core Components
 
-🧩 Architecture Breakdown
-1️⃣ Document Processing Layer
+### 📄 Document Layer
 
-Multi-format file loaders
+-   PDF, DOCX, XLSX support\
+-   Parallel processing
 
-Parallel ingestion using ThreadPoolExecutor
+### 🧠 Embedding Layer
 
-Secure temporary storage
+-   sentence-transformers/all-MiniLM-L6-v2\
+-   384-dimensional vectors
 
-2️⃣ Text Processing Layer
+### 📦 Vector Database
 
-Recursive character text splitting
+-   FAISS similarity search\
+-   Persistent index storage
 
-Chunk size: 500
+### 🤖 LLM Layer
 
-Overlap: 50
+-   Llama 3.3 (70B)\
+-   Groq API for low-latency inference
 
-Preserves semantic continuity
+### 💬 Interface Layer
 
-3️⃣ Embedding Layer
+-   Streamlit frontend\
+-   Conversational memory support
 
-Model: sentence-transformers/all-MiniLM-L6-v2
+------------------------------------------------------------------------
 
-384-dimensional dense vectors
+## ⚙️ Tech Stack
 
-Implemented using HuggingFaceEmbeddings
-
-4️⃣ Vector Database Layer
-
-FAISS similarity search
-
-Persistent local index
-
-Fast nearest-neighbor retrieval
-
-5️⃣ Retrieval & Generation Layer
-
-Relevant chunks retrieved
-
-Context injected into prompt
-
-Response generated using Llama 3.3 (70B)
-
-6️⃣ Interface Layer
-
-Streamlit frontend
-
-Session-based conversational memory
-
-Real-time response display
-
-✨ Key Features
-
-Retrieval-Augmented Generation pipeline
-
-Multi-format document support
-
-Parallel document ingestion
-
-Optimized semantic chunking
-
-HuggingFace sentence-transformer embeddings
-
-FAISS vector similarity search
-
-Llama 3.3 (70B) integration via Groq
-
-Conversational memory support
-
-Persistent vector storage
-
-Streamlit-based interactive UI
-
-Live cloud deployment
-
-🛠️ Tech Stack
-Programming Language
-
-Python
-
-AI / Machine Learning
-
-LangChain
-
-HuggingFace Transformers
-
-FAISS
-
-Llama 3.3 (via Groq API)
-
-Frontend
-
+Python\
+LangChain\
+FAISS\
+HuggingFace Transformers\
+Llama 3.3\
+Groq API\
 Streamlit
 
-Document Processing
+------------------------------------------------------------------------
 
-PyPDF
+## ⚡ Performance Highlights
 
-docx2txt
+• Multi-threaded document ingestion\
+• Optimized chunk size (500 / 50 overlap)\
+• Cached embeddings\
+• Persistent FAISS indexing\
+• Low-latency inference
 
-openpyxl
+------------------------------------------------------------------------
 
-Utilities
-
-dotenv
-
-concurrent.futures
-
-🔄 Project Workflow
-
-Import dependencies
-
-Upload documents
-
-Extract text using loaders
-
-Split text into semantic chunks
-
-Generate embeddings
-
-Store embeddings in FAISS
-
-Initialize retrieval chain
-
-Accept user query
-
-Retrieve relevant document chunks
-
-Generate response using Llama 3.3
-
-Display output in Streamlit
-
-Maintain chat history
-
-⚡ Performance Optimizations
-
-Cached embeddings to prevent recomputation
-
-Multi-threaded document ingestion
-
-Persistent FAISS indexing
-
-Optimized chunk size and overlap
-
-Low-latency inference using Groq API
-
-🌍 Live Demo
+## 🌍 Live Demo
 
 https://nexus-rag-cey8qzv9fh2tourqlt5nmu.streamlit.app/
 
-💻 GitHub Repository
+------------------------------------------------------------------------
+
+## 💻 GitHub Repository
 
 https://github.com/Swajith-ai/Nexus-RAG.git
 
-🧠 Concepts Demonstrated
+------------------------------------------------------------------------
 
-Retrieval-Augmented Generation (RAG)
+## 🧠 Concepts Demonstrated
 
-Vector Databases & Semantic Search
+Retrieval-Augmented Generation\
+Vector Databases\
+Semantic Search\
+Prompt Engineering\
+Conversational Memory\
+AI System Design
 
-Transformer-Based Embeddings
+------------------------------------------------------------------------
 
-Prompt Engineering
-
-Conversational Memory
-
-AI Deployment Architecture
-
-Parallel Processing
-
-👨‍💻 Author
+## 👨‍💻 Author
 
 Swajith S S
