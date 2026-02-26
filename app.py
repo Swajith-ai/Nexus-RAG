@@ -3,15 +3,13 @@ import time
 import os
 from dotenv import load_dotenv
 
-# NEW MODULAR IMPORTS
+
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from # Change these lines
 from langchain_classic.chains.retrieval import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
-
 # -----------------------------
 # Configuration & API Check
 # -----------------------------
