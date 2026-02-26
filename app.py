@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
-from langchain.chains import ConversationalRetrievalChain
+from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
 
 from helper import load_pdf, text_split, download_embeddings
 
