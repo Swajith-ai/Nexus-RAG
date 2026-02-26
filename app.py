@@ -3,63 +3,52 @@ import time
 import os
 from dotenv import load_dotenv
 
+# NEW MODULAR IMPORTS
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.chains import create_retrieval_chain
+from langchain.chains.retrieval import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
 
 # -----------------------------
-# Load Environment Variables
+# Configuration & API Check
 # -----------------------------
 load_dotenv()
-
-# Check for API Key
 if not os.getenv("OPENAI_API_KEY"):
-    st.error("Error: OPENAI_API_KEY not found in environment variables.")
+    st.error("Missing OPENAI_API_KEY in .env file.")
     st.stop()
 
-# -----------------------------
-# Streamlit Page Config
-# -----------------------------
-st.set_page_config(page_title="Nexus Intelligence Agent", layout="centered")
+st.set_page_config(page_title="Nexus Intelligence Agent", page_icon="🤖")
 
-# Initialize Session State for Chat History
+# Initialize Chat History
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # -----------------------------
-# Load Vectorstore
+# Resource Loading
 # -----------------------------
 @st.cache_resource
-def load_vectorstore():
-    # IMPORTANT: You must use the same embedding model used to create the index
-    embeddings = OpenAIEmbeddings() 
-    try:
-        return FAISS.load_local(
-            "faiss_index", 
-            embeddings, 
-            allow_dangerous_deserialization=True
-        )
-    except Exception as e:
-        st.error(f"Failed to load FAISS index: {e}")
-        return None
+def load_resources():
+    # FAISS requires the embedding model to search
+    embeddings = OpenAIEmbeddings()
+    if os.path.exists("faiss_index"):
+        return FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+    return None
 
-vectorstore = load_vectorstore()
+vectorstore = load_resources()
 
+# -----------------------------
+# Main Application Logic
+# -----------------------------
 if vectorstore:
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-
-    # -----------------------------
-    # LLM & Chain Setup
-    # -----------------------------
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
+    # Prompt Template
     prompt = ChatPromptTemplate.from_template("""
-    You are a professional Nexus Intelligence Assistant. 
-    Answer the user's question based ONLY on the provided context.
-    If the answer isn't in the context, say: "I could not find this information in the provided documents."
+    You are an intelligent assistant. Answer strictly based on the provided context.
+    If the answer is not in the context, say: "I could not find this information in the provided documents."
 
     <context>
     {context}
@@ -68,51 +57,41 @@ if vectorstore:
     Question: {input}
     """)
 
-    document_chain = create_stuff_documents_chain(llm, prompt)
-    retrieval_chain = create_retrieval_chain(retriever, document_chain)
+    # Build Chain
+    combine_docs_chain = create_stuff_documents_chain(llm, prompt)
+    retrieval_chain = create_retrieval_chain(retriever, combine_docs_chain)
 
-    # -----------------------------
-    # UI - Chat Interface
-    # -----------------------------
-    st.title("🤖 Nexus Intelligence Agent")
-    st.divider()
+    # UI Header
+    st.title("Nexus Intelligence Agent")
+    st.markdown("---")
 
-    # Display existing chat history
+    # Display Chat History using Native UI
     for message in st.session_state.chat_history:
-        if isinstance(message, HumanMessage):
-            with st.chat_message("user"):
-                st.markdown(message.content)
-        elif isinstance(message, AIMessage):
-            with st.chat_message("assistant"):
-                st.markdown(message.content)
+        with st.chat_message("user" if isinstance(message, HumanMessage) else "assistant"):
+            st.markdown(message.content)
 
-    # User Input
-    user_question = st.chat_input("Query the knowledge base...")
-
-    if user_question:
-        # Display user message
+    # Chat Input
+    if user_input := st.chat_input("Query the knowledge base..."):
+        # Show User Message
         with st.chat_message("user"):
-            st.markdown(user_question)
+            st.markdown(user_input)
         
-        # Process retrieval and generation
+        # Generate Response
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing documents..."):
+            with st.spinner("Searching knowledge base..."):
                 start_time = time.time()
                 
-                response = retrieval_chain.invoke({
-                    "input": user_question,
-                    "chat_history": st.session_state.chat_history
-                })
+                # Logic Execution
+                result = retrieval_chain.invoke({"input": user_input})
+                answer = result["answer"]
                 
-                end_time = time.time()
-                response_time = round(end_time - start_time, 2)
-                
-                answer = response["answer"]
+                # Performance Metric
+                elapsed = round(time.time() - start_time, 2)
                 st.markdown(answer)
-                st.caption(f"⏱ Response time: {response_time}s")
+                st.caption(f"⏱ Response time: {elapsed}s")
 
-        # Update Session State
-        st.session_state.chat_history.append(HumanMessage(content=user_question))
+        # Save to History
+        st.session_state.chat_history.append(HumanMessage(content=user_input))
         st.session_state.chat_history.append(AIMessage(content=answer))
 else:
-    st.warning("Please ensure the 'faiss_index' folder exists in the root directory.")
+    st.warning("⚠️ 'faiss_index' not found. Please ensure your vector store is in the root directory.")
