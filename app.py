@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
-from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 
 from helper import load_pdf, text_split, download_embeddings
 
@@ -13,18 +14,16 @@ from helper import load_pdf, text_split, download_embeddings
 # 🔐 Load Environment
 # ----------------------------
 load_dotenv()
-
 groq_key = os.getenv("GROQ_API_KEY")
 
 if not groq_key:
-    st.error("Groq API Key not found. Please configure it in .env or secrets.toml.")
+    st.error("Groq API Key not found. Please configure it.")
     st.stop()
 
 # ----------------------------
 # 🎨 UI CONFIG
 # ----------------------------
 st.set_page_config(page_title="Nexus Control", layout="wide")
-
 st.title("Nexus Control")
 st.subheader("🧠 Intelligence Mode")
 
@@ -83,8 +82,6 @@ if st.button("🔄 Sync Knowledge Base"):
             embeddings = download_embeddings()
 
             vector_db = FAISS.from_documents(chunks, embeddings)
-
-            # 💾 Save FAISS locally
             vector_db.save_local("nexus_faiss")
 
             st.session_state.vector_db = vector_db
@@ -118,7 +115,6 @@ if query:
     else:
         start_time = time.time()
 
-        # 🧠 Smarter MMR Retrieval
         retriever = st.session_state.vector_db.as_retriever(
             search_type="mmr",
             search_kwargs={
@@ -134,39 +130,39 @@ if query:
             temperature=current_temp
         )
 
-        qa_chain = ConversationalRetrievalChain.from_llm(
-            llm=llm,
-            retriever=retriever,
-            return_source_documents=True
+        prompt = ChatPromptTemplate.from_template(
+            """
+            You are Nexus Intelligence Agent.
+            Answer the question using ONLY the provided context.
+
+            Context:
+            {context}
+
+            Question:
+            {question}
+            """
         )
 
-        result = qa_chain({
-            "question": query,
-            "chat_history": st.session_state.chat_history[-10:]
-        })
+        def format_docs(docs):
+            return "\n\n".join(doc.page_content for doc in docs)
 
-        answer = result["answer"]
-        sources = result["source_documents"]
+        # LCEL pipeline
+        rag_chain = (
+            {
+                "context": retriever | format_docs,
+                "question": RunnablePassthrough(),
+            }
+            | prompt
+            | llm
+        )
+
+        response = rag_chain.invoke(query)
 
         end_time = time.time()
 
-        # 📝 Store chat
-        st.session_state.chat_history.append((query, answer))
+        st.session_state.chat_history.append((query, response.content))
 
-        # 🖥 Display
         st.markdown("### 🤖 Response")
-        st.write(answer)
-
-        st.markdown("### 📚 Sources")
-        for i, doc in enumerate(sources):
-            st.markdown(f"**Source {i+1}:**")
-            st.write(doc.metadata.get("source", "Unknown"))
+        st.write(response.content)
 
         st.caption(f"⏱ Analysis Time: {round(end_time - start_time, 2)}s")
-
-# ----------------------------
-# 🧹 Clear Session
-# ----------------------------
-if st.button("🧹 Purge Memory"):
-    st.session_state.chat_history = []
-    st.success("Chat memory cleared.")
