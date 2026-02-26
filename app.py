@@ -1,96 +1,78 @@
 import streamlit as st
-import time
 import os
-from dotenv import load_dotenv
+import time
 
-
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_classic.chains.retrieval import create_retrieval_chain
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage, AIMessage
-# -----------------------------
-# Configuration & API Check
-# -----------------------------
-load_dotenv()
+# --- 1. KEY CHECK ---
+if "OPENAI_API_KEY" in st.secrets:
+    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+elif os.path.exists(".env"):
+    from dotenv import load_dotenv
+    load_dotenv()
+    
 if not os.getenv("OPENAI_API_KEY"):
-    st.error("Missing OPENAI_API_KEY in .env file.")
+    st.error("❌ API Key is missing. Check .env or secrets.toml")
     st.stop()
 
-st.set_page_config(page_title="Nexus Intelligence Agent", page_icon="🤖")
+# --- 2. IMPORTS ---
+try:
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+    from langchain_community.vectorstores import FAISS
+    from langchain_classic.chains.retrieval import create_retrieval_chain
+    from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.messages import HumanMessage, AIMessage
+except ImportError as e:
+    st.error(f"❌ Import Error: {e}")
+    st.stop()
 
-# Initialize Chat History
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+st.title("🤖 Nexus Intelligence Agent")
 
-# -----------------------------
-# Resource Loading
-# -----------------------------
+# --- 3. LOADING FAISS ---
 @st.cache_resource
-def load_resources():
-    # FAISS requires the embedding model to search
-    embeddings = OpenAIEmbeddings()
-    if os.path.exists("faiss_index"):
-        return FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    return None
+def load_vectorstore():
+    try:
+        embeddings = OpenAIEmbeddings()
+        index_path = "faiss_index"
+        if os.path.exists(index_path):
+            # We add a small success toast to see it working
+            vstore = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+            return vstore
+        else:
+            st.error(f"❌ Folder '{index_path}' not found in {os.getcwd()}")
+            return None
+    except Exception as e:
+        st.error(f"❌ FAISS Error: {e}")
+        return None
 
-vectorstore = load_resources()
+with st.status("Loading knowledge base...", expanded=False) as status:
+    vectorstore = load_vectorstore()
+    if vectorstore:
+        status.update(label="✅ Knowledge base loaded!", state="complete")
+    else:
+        status.update(label="❌ Loading failed.", state="error")
 
-# -----------------------------
-# Main Application Logic
-# -----------------------------
+# --- 4. CHAT LOGIC ---
 if vectorstore:
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    retriever = vectorstore.as_retriever()
+    llm = ChatOpenAI(model="gpt-4o-mini")
 
-    # Prompt Template
-    prompt = ChatPromptTemplate.from_template("""
-    You are an intelligent assistant. Answer strictly based on the provided context.
-    If the answer is not in the context, say: "I could not find this information in the provided documents."
+    prompt = ChatPromptTemplate.from_template("Answer based on: {context}\n\nQuestion: {input}")
+    
+    document_chain = create_stuff_documents_chain(llm, prompt)
+    retrieval_chain = create_retrieval_chain(retriever, document_chain)
 
-    <context>
-    {context}
-    </context>
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
-    Question: {input}
-    """)
+    # Display History
+    for msg in st.session_state.chat_history:
+        st.chat_message("user" if isinstance(msg, HumanMessage) else "assistant").write(msg.content)
 
-    # Build Chain
-    combine_docs_chain = create_stuff_documents_chain(llm, prompt)
-    retrieval_chain = create_retrieval_chain(retriever, combine_docs_chain)
-
-    # UI Header
-    st.title("Nexus Intelligence Agent")
-    st.markdown("---")
-
-    # Display Chat History using Native UI
-    for message in st.session_state.chat_history:
-        with st.chat_message("user" if isinstance(message, HumanMessage) else "assistant"):
-            st.markdown(message.content)
-
-    # Chat Input
-    if user_input := st.chat_input("Query the knowledge base..."):
-        # Show User Message
-        with st.chat_message("user"):
-            st.markdown(user_input)
-        
-        # Generate Response
+    # Input Box
+    if user_query := st.chat_input("Ask a question..."):
+        st.chat_message("user").write(user_query)
         with st.chat_message("assistant"):
-            with st.spinner("Searching knowledge base..."):
-                start_time = time.time()
-                
-                # Logic Execution
-                result = retrieval_chain.invoke({"input": user_input})
-                answer = result["answer"]
-                
-                # Performance Metric
-                elapsed = round(time.time() - start_time, 2)
-                st.markdown(answer)
-                st.caption(f"⏱ Response time: {elapsed}s")
-
-        # Save to History
-        st.session_state.chat_history.append(HumanMessage(content=user_input))
-        st.session_state.chat_history.append(AIMessage(content=answer))
-else:
-    st.warning("⚠️ 'faiss_index' not found. Please ensure your vector store is in the root directory.")
+            res = retrieval_chain.invoke({"input": user_query})
+            st.write(res["answer"])
+            st.session_state.chat_history.append(HumanMessage(content=user_query))
+            st.session_state.chat_history.append(AIMessage(content=res["answer"]))
