@@ -1,185 +1,211 @@
-import streamlit as st
 import os
-import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+import streamlit as st
+import logging
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor
 
-# Core RAG Components
-from src.helper import download_embeddings
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
-from langchain_classic.chains import create_retrieval_chain
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.schema import Document
 
-# Loaders
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredExcelLoader
+from sentence_transformers import CrossEncoder
+from rank_bm25 import BM25Okapi
+import numpy as np
 
-# 1. PAGE CONFIG & CACHING
-st.set_page_config(page_title="Nexus Intelligence System", layout="wide")
+# -----------------------
+# Load Environment
+# -----------------------
 load_dotenv()
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+# -----------------------
+# Logging Setup
+# -----------------------
+logging.basicConfig(level=logging.INFO)
+
+# -----------------------
+# Streamlit Config
+# -----------------------
+st.set_page_config(page_title="Nexus RAG Enterprise", layout="wide")
+st.title("🚀 Nexus Enterprise RAG")
+
+# -----------------------
+# Embeddings (Cached)
+# -----------------------
 @st.cache_resource
-def get_embeddings():
-    """Caches the embedding model to RAM to prevent slow reloads."""
-    return download_embeddings()
-
-# --- CLOUD-SAFE API KEY LOGIC ---
-try:
-    groq_key = st.secrets["GROQ_API_KEY"]
-except:
-    groq_key = os.getenv("GROQ_API_KEY")
-
-# 2. SESSION STATE INITIALIZATION
-if "messages" not in st.session_state: st.session_state.messages = []
-if "chat_history" not in st.session_state: st.session_state.chat_history = []
-if "vector_db" not in st.session_state: st.session_state.vector_db = None
-if "logs" not in st.session_state: st.session_state.logs = []
-if "total_chunks" not in st.session_state: st.session_state.total_chunks = 0
-if "sync_time" not in st.session_state: st.session_state.sync_time = 0.0
-
-def add_log(text):
-    timestamp = time.strftime("%H:%M:%S")
-    st.session_state.logs.append(f"[{timestamp}] {text}")
-
-def load_single_file(uploaded_file):
-    suffix = f".{uploaded_file.name.split('.')[-1]}"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(uploaded_file.getvalue())
-        tmp_path = tmp.name
-    
-    if uploaded_file.name.endswith(".pdf"): loader = PyPDFLoader(tmp_path)
-    elif uploaded_file.name.endswith(".docx"): loader = Docx2txtLoader(tmp_path)
-    elif uploaded_file.name.endswith(".xlsx"): loader = UnstructuredExcelLoader(tmp_path)
-    
-    docs = loader.load()
-    for doc in docs: doc.metadata["source_file"] = uploaded_file.name
-    os.remove(tmp_path)
-    return docs
-
-# 3. SIDEBAR: INTELLIGENCE MODES & SYSTEM CONTROLS
-with st.sidebar:
-    st.title("Nexus Control")
-    
-    # INTUITIVE MODE SELECTION
-    st.subheader("🧠 Intelligence Mode")
-    mode = st.radio(
-        "Select Operation Mode:",
-        ["Instant", "General", "Research", "Deep Think"],
-        index=1
+def load_embeddings():
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    # DYNAMIC LOGIC FOR MODES
-    mode_data = {
-        "Instant": {"temp": 0.7, "k": 3, "desc": "⚡ **Instant Mode:** Prioritizes speed. Uses 3 chunks for a fast, conversational response."},
-        "General": {"temp": 0.4, "k": 5, "desc": "⚖️ **General Mode:** The balanced zone. Uses 5 chunks for reliable daily tasks."},
-        "Research": {"temp": 0.2, "k": 10, "desc": "🔍 **Research Mode:** Deep retrieval. Grabs 10 chunks to ensure no detail is missed."},
-        "Deep Think": {"temp": 0.1, "k": 15, "desc": "🧠 **Deep Think:** Maximum accuracy. Cross-references 15 nodes for logical synthesis."}
-    }
+embeddings = load_embeddings()
+
+# -----------------------
+# Cross Encoder Re-ranker
+# -----------------------
+@st.cache_resource
+def load_reranker():
+    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+reranker = load_reranker()
+
+# -----------------------
+# Document Loader
+# -----------------------
+def load_documents(uploaded_files):
+    documents = []
+
+    for file in uploaded_files:
+        with open(file.name, "wb") as f:
+            f.write(file.getbuffer())
+
+        loader = PyPDFLoader(file.name)
+        docs = loader.load()
+
+        for doc in docs:
+            doc.metadata["source"] = file.name
+
+        documents.extend(docs)
+
+    return documents
+
+
+# -----------------------
+# Semantic Chunking
+# -----------------------
+def split_documents(documents):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,
+        chunk_overlap=100,
+        separators=["\n\n", "\n", ".", " "],
+    )
+    return splitter.split_documents(documents)
+
+
+# -----------------------
+# Persistent Vector Store
+# -----------------------
+VECTOR_PATH = "vectorstore"
+
+def build_or_load_vectorstore(docs):
+    if os.path.exists(VECTOR_PATH):
+        logging.info("Loading existing FAISS index...")
+        return FAISS.load_local(VECTOR_PATH, embeddings, allow_dangerous_deserialization=True)
+
+    logging.info("Building new FAISS index...")
+    vectorstore = FAISS.from_documents(docs, embeddings)
+    vectorstore.save_local(VECTOR_PATH)
+    return vectorstore
+
+
+# -----------------------
+# Hybrid Retrieval
+# -----------------------
+def hybrid_retrieve(query, vectorstore, docs, k=10):
+    # Dense Search
+    dense_docs = vectorstore.similarity_search(query, k=k)
+
+    # BM25 Search
+    tokenized_corpus = [doc.page_content.split() for doc in docs]
+    bm25 = BM25Okapi(tokenized_corpus)
+
+    tokenized_query = query.split()
+    scores = bm25.get_scores(tokenized_query)
+    top_n = np.argsort(scores)[::-1][:k]
+    sparse_docs = [docs[i] for i in top_n]
+
+    # Combine & Deduplicate
+    combined = list({doc.page_content: doc for doc in dense_docs + sparse_docs}.values())
+
+    return combined
+
+
+# -----------------------
+# Re-Ranking
+# -----------------------
+def rerank(query, docs, top_k=5):
+    pairs = [[query, doc.page_content] for doc in docs]
+    scores = reranker.predict(pairs)
+
+    ranked = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
+    return [doc for doc, _ in ranked[:top_k]]
+
+
+# -----------------------
+# LLM Setup
+# -----------------------
+llm = ChatGroq(
+    groq_api_key=GROQ_API_KEY,
+    model="llama-3.3-70b-versatile",
+    temperature=0.2,
+)
+
+# -----------------------
+# Streaming Answer
+# -----------------------
+def generate_answer(query, docs):
+    context = "\n\n".join([doc.page_content for doc in docs])
+
+    prompt = f"""
+    You are an enterprise AI assistant.
+    Answer ONLY from context.
     
-    st.info(mode_data[mode]["desc"])
+    Context:
+    {context}
     
-    # Apply parameters
-    current_temp = mode_data[mode]["temp"]
-    current_k = mode_data[mode]["k"]
+    Question:
+    {query}
+    """
 
-    st.divider()
-    if st.button("Purge Session"):
-        st.session_state.messages, st.session_state.chat_history, st.session_state.logs, st.session_state.total_chunks, st.session_state.vector_db = [], [], [], 0, None
-        st.rerun()
+    response = llm.stream(prompt)
 
-    st.divider()
-    st.subheader("📁 Data Ingestion")
-    uploaded_files = st.file_uploader("Upload Tech Docs", type=["pdf", "docx", "xlsx"], accept_multiple_files=True)
-    
-    if st.button("Initialize Sync"):
-        if uploaded_files:
-            start_time = time.time()
-            add_log(f"Sync initiated for {len(uploaded_files)} files...")
-            with ThreadPoolExecutor() as executor:
-                results = list(executor.map(load_single_file, uploaded_files))
-            all_docs = [doc for sublist in results for doc in sublist]
-            
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=150)
-            final_docs = text_splitter.split_documents(all_docs)
-            st.session_state.total_chunks = len(final_docs)
-            st.session_state.vector_db = FAISS.from_documents(final_docs, get_embeddings())
-            
-            st.session_state.sync_time = time.time() - start_time
-            add_log(f"Sync successful: {st.session_state.sync_time:.2f}s")
-            st.success(f"Sync Complete: {st.session_state.sync_time:.2f}s")
+    full_answer = ""
+    for chunk in response:
+        full_answer += chunk.content
+        yield full_answer
 
-    # METRICS DISPLAY
-    st.divider()
-    st.markdown(f"**Last Sync:** `{st.session_state.sync_time:.2f}s` | **Nodes:** `{st.session_state.total_chunks}`")
-    
-    st.subheader("📟 System Logs")
-    for log in st.session_state.logs[-5:]:
-        st.markdown(f"<p style='font-size:11px; color:#888; margin:0;'>{log}</p>", unsafe_allow_html=True)
 
-# 4. MAIN CHAT INTERFACE
-st.title("Nexus Intelligence Agent")
-st.caption(f"Status: **{mode} Mode** is engaged.")
+# -----------------------
+# Streamlit UI
+# -----------------------
+uploaded_files = st.file_uploader(
+    "Upload PDF files", type=["pdf"], accept_multiple_files=True
+)
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+if uploaded_files:
 
-# 5. RETRIEVAL & RESPONSE LOGIC
-if prompt := st.chat_input("Query the knowledge base..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"): st.markdown(prompt)
+    with st.spinner("Processing documents..."):
+        documents = load_documents(uploaded_files)
+        split_docs = split_documents(documents)
+        vectorstore = build_or_load_vectorstore(split_docs)
 
-    with st.chat_message("assistant"):
-        if not st.session_state.vector_db:
-            st.warning("Nexus requires data. Please upload and sync documents.")
-        else:
-            try:
-                # START ANALYSIS TIMER
-                analysis_start = time.time()
-                
-                llm = ChatGroq(model_name="llama-3.3-70b-versatile", groq_api_key=groq_key, temperature=current_temp)
-                
-                # Dynamic System Prompting
-                system_instruction = "You are the Nexus Technical Agent. "
-                if mode == "Deep Think":
-                    system_instruction += "Think step-by-step. Analyze all provided context for complex links and contradictions."
-                
-                prompt_template = ChatPromptTemplate.from_messages([
-                    ("system", f"{system_instruction}\n\nContext:\n{{context}}"),
-                    MessagesPlaceholder(variable_name="chat_history"),
-                    ("human", "{input}"),
-                ])
+    st.success("Documents Ready!")
 
-                # Use dynamic K value based on mode
-                retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": current_k})
-                document_chain = create_stuff_documents_chain(llm, prompt_template)
-                retrieval_chain = create_retrieval_chain(retriever, document_chain)
+    query = st.text_input("Ask a question")
 
-                with st.spinner(f"Nexus {mode} is analyzing..."):
-                    response = retrieval_chain.invoke({"input": prompt, "chat_history": st.session_state.chat_history})
+    if query:
+        start_time = time.time()
 
-                # CALCULATE DURATION
-                analysis_duration = time.time() - analysis_start
-                ans = response["answer"]
-                
-                # OUTPUT DISPLAY
-                st.markdown(ans)
-                st.caption(f"⏱️ Analysis Time: **{analysis_duration:.2f}s** | Mode: **{mode}**")
-                
-                with st.expander("🔍 Intelligence Evidence (Source Attribution)"):
-                    for i, doc in enumerate(response["context"]):
-                        source = doc.metadata.get("source_file", "Unknown")
-                        page = doc.metadata.get("page", "N/A")
-                        st.markdown(f"**{i+1}. {source}** (Pg. {page})")
-                        st.caption(f"{doc.page_content[:150]}...")
-                
-                st.session_state.chat_history.extend([HumanMessage(content=prompt), AIMessage(content=ans)])
-                if len(st.session_state.chat_history) > 10: st.session_state.chat_history = st.session_state.chat_history[-10:]
-                st.session_state.messages.append({"role": "assistant", "content": ans})
+        retrieved = hybrid_retrieve(query, vectorstore, split_docs, k=10)
+        reranked = rerank(query, retrieved, top_k=5)
 
-            except Exception as e:
-                st.error(f"Execution Error: {e}")
+        st.subheader("Answer")
+
+        answer_placeholder = st.empty()
+        for partial in generate_answer(query, reranked):
+            answer_placeholder.markdown(partial)
+
+        end_time = time.time()
+
+        st.write("---")
+        st.subheader("Sources")
+
+        for doc in reranked:
+            st.write(f"📄 {doc.metadata.get('source')}")
+
+        st.write(f"⏱ Response Time: {round(end_time - start_time, 2)} sec")
